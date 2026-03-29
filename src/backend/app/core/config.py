@@ -46,7 +46,20 @@ class Settings(BaseSettings):
     # CORS — フロントエンドのオリジンを許可
     cors_origins: list[str] = ["http://localhost:3000"]
 
-    # 外部サービス
+    # Ollama（ローカルLLM — デフォルト）
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+    ollama_embed_model: str = "nomic-embed-text"
+
+    # AI/Embeddingプロバイダー選択: ollama / openai / anthropic
+    ai_provider: str = "ollama"
+    embedding_provider: str = "ollama"
+
+    # Embedding次元数（プロバイダーに応じて自動設定）
+    # ollama nomic-embed-text: 768, mxbai-embed-large: 1024, openai text-embedding-3-small: 1536
+    embedding_dim: int = 768
+
+    # 外部サービス（オプショナルフォールバック）
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     stripe_secret_key: str = ""

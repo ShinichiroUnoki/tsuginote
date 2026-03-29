@@ -141,7 +141,7 @@ async def ask_question(
     if context_chunks:
         try:
             answer = filter_llm_output(
-                await rag_service.generate_answer(safe_question, context_chunks)
+                await ai_service.generate_answer(safe_question, context_chunks)
             )
         except Exception as e:
             logger.error("Q&A回答生成エラー: %s", e)
