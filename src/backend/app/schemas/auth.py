@@ -1,9 +1,10 @@
 """認証関連のPydanticスキーマ — リクエスト/レスポンスの型定義"""
 
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -12,6 +13,18 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=1, max_length=100)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, v: str) -> str:
+        """パスワード複雑性チェック — ブルートフォース耐性の確保"""
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("パスワードには大文字を1文字以上含めてください")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("パスワードには小文字を1文字以上含めてください")
+        if not re.search(r"\d", v):
+            raise ValueError("パスワードには数字を1文字以上含めてください")
+        return v
 
 
 class UserLogin(BaseModel):

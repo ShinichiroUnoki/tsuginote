@@ -1,5 +1,6 @@
-"""ドキュメントAPI — CRUD + バージョン履歴"""
+"""ドキュメントAPI — CRUD + バージョン履歴 + RAGインデックス自動更新"""
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,6 +11,7 @@ from app.api.deps import get_current_user, get_db
 from app.api.v1.workspaces import _verify_membership
 from app.models.document import Document, DocumentTag, DocumentVersion
 from app.models.user import User
+from app.services.rag_service import rag_service
 from app.schemas.document import (
     DocumentCreate,
     DocumentListResponse,
@@ -18,9 +20,27 @@ from app.schemas.document import (
     DocumentVersionResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/workspaces/{workspace_id}/documents", tags=["ドキュメント"]
 )
+
+
+async def _index_document_async(document_id: uuid.UUID, content: str) -> None:
+    """RAGインデックスを非同期更新 — Qdrant障害時はログのみで継続"""
+    try:
+        await rag_service.index_document(document_id, content)
+    except Exception as e:
+        logger.warning("RAGインデックス更新失敗（ドキュメント %s）: %s", document_id, e)
+
+
+async def _delete_document_index(document_id: uuid.UUID) -> None:
+    """RAGインデックスからドキュメントを削除 — Qdrant障害時はログのみ"""
+    try:
+        await rag_service.delete_document(document_id)
+    except Exception as e:
+        logger.warning("RAGインデックス削除失敗（ドキュメント %s）: %s", document_id, e)
 
 
 def _to_document_response(doc: Document) -> DocumentResponse:
@@ -90,6 +110,11 @@ async def create_document(
 
     await db.flush()
     await db.refresh(doc)
+
+    # RAGインデックスに登録（ドキュメント内容がある場合）
+    if body.content:
+        await _index_document_async(doc.id, body.content)
+
     return _to_document_response(doc)
 
 
@@ -205,6 +230,11 @@ async def update_document(
     db.add(doc)
     await db.flush()
     await db.refresh(doc)
+
+    # content変更時にRAGインデックスを再構築
+    if body.content is not None:
+        await _index_document_async(doc.id, doc.content or "")
+
     return _to_document_response(doc)
 
 
@@ -231,6 +261,9 @@ async def delete_document(
 
     doc.is_deleted = True
     db.add(doc)
+
+    # RAGインデックスからも削除
+    await _delete_document_index(doc.id)
 
 
 @router.get(

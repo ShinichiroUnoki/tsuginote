@@ -1,5 +1,6 @@
 """認証API — サインアップ・ログイン・トークン更新・プロフィール管理"""
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -25,18 +26,20 @@ from app.schemas.auth import (
     UserUpdate,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["認証"])
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def signup(body: UserCreate, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     """新規ユーザー登録 — 同時にデフォルトワークスペースも作成"""
-    # メール重複チェック
+    # メール重複チェック — ユーザー列挙攻撃を防ぐため汎用メッセージを使用
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="このメールアドレスは既に使用されています",
+            detail="アカウントの作成に失敗しました。別のメールアドレスをお試しください",
         )
 
     user = User(
@@ -73,12 +76,24 @@ async def login(body: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenRes
     """ログイン — メール+パスワードでJWTを発行"""
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
-    if user is None or not verify_password(body.password, user.password_hash):
+
+    if user is None:
+        # タイミング攻撃対策: ユーザーが存在しなくてもハッシュ比較を実行
+        verify_password(body.password, "$2b$12$dummy.hash.for.timing.attack.preventionstub")
+        logger.warning(f"ログイン失敗: 存在しないメール (email={body.email})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="メールアドレスまたはパスワードが正しくありません",
         )
 
+    if not verify_password(body.password, user.password_hash):
+        logger.warning(f"ログイン失敗: パスワード不一致 (user_id={user.id})")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="メールアドレスまたはパスワードが正しくありません",
+        )
+
+    logger.info(f"ログイン成功 (user_id={user.id})")
     return TokenResponse(
         access_token=create_access_token(str(user.id)),
         refresh_token=create_refresh_token(str(user.id)),
@@ -107,7 +122,17 @@ async def refresh_token(
         )
 
     user_id = payload.get("sub")
-    result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+    try:
+        parsed_user_id = uuid.UUID(user_id) if user_id else None
+    except (ValueError, AttributeError):
+        parsed_user_id = None
+    if parsed_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="無効なリフレッシュトークンです",
+        )
+
+    result = await db.execute(select(User).where(User.id == parsed_user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(

@@ -45,8 +45,16 @@ async def get_current_user(
             detail="無効なトークンです",
         )
 
+    try:
+        parsed_user_id = uuid.UUID(user_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="無効なトークンです",
+        )
+
     result = await db.execute(
-        select(User).where(User.id == uuid.UUID(user_id))
+        select(User).where(User.id == parsed_user_id)
     )
     user = result.scalar_one_or_none()
     if user is None:
