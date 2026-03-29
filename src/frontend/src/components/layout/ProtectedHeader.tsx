@@ -5,7 +5,6 @@
 
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,11 +26,9 @@ export function ProtectedHeader() {
   return (
     <header className="flex h-14 items-center justify-end border-b border-slate-800 bg-slate-900/50 px-6">
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="gap-2 text-slate-300 hover:text-white">
-            <User className="h-4 w-4" />
-            <span className="text-sm">{user?.name ?? "ユーザー"}</span>
-          </Button>
+        <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white">
+          <User className="h-4 w-4" />
+          <span>{user?.name ?? "ユーザー"}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
           <DropdownMenuItem onClick={() => router.push("/settings/profile")}>
