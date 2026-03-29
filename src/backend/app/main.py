@@ -6,6 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.auth import router as auth_router
 from app.api.v1.workspaces import router as workspaces_router
 from app.api.v1.documents import router as documents_router
+from app.api.v1.ai import router as ai_router
+from app.api.v1.checklists import router as checklists_router
+from app.api.v1.billing import router as billing_router
+from app.api.v1.dashboard import router as dashboard_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -28,6 +32,10 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")
 app.include_router(documents_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
+app.include_router(checklists_router, prefix="/api/v1")
+app.include_router(billing_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
 
 
 @app.get("/api/health")
